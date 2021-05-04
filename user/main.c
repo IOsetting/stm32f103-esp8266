@@ -7,13 +7,13 @@ int main(void)
   Systick_Init();
 
   USART1_Init(); // for printf() logging
-  //TIM1_Init();
-  //TIM2_Init();
-  TIM3_Init();
+  TIM2_Init(); // TIM2 for UHF RFID
+  TIM3_Init(); // TIM3 for ESP8266
   PB12_Init();
   PB12_Off(); // Turn off PB12 LED
   ESP8266_Init();
-  printf("## Init finished ##\r\n");
+  RFID_Init();
+  
   ESP8266_Set_Stationmode();
   printf("## Switched to station mode ##\r\n");
 

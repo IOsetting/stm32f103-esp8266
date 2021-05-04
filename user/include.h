@@ -13,5 +13,6 @@
 #include "uart.h"
 #include "pb12.h"
 #include "esp8266.h"
+#include "rfid.h"
 
 #endif

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "buffer.h"
 #include "esp8266.h"
 #include "timer.h"
 
@@ -11,13 +12,12 @@
 #define ESP_RX_GPIO   GPIOA
 #define ESP_USART     USART2
 
-ESP_BufTypeDef ESP_RX_BUF;    //Wifi串口接收缓冲区
+BufferTypeDef ESP_RX_BUF;    //Wifi串口接收缓冲区
 u8 ESP_RX_STATE = 0;          //初始化已接收数据为0
-
 
 void ESP8266_Init(void)
 {
-  Buff_Init(&ESP_RX_BUF, ESP8266_BUF_SIZE);
+  Buffer_Init(&ESP_RX_BUF, ESP8266_BUF_SIZE);
 
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
   //RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
@@ -57,6 +57,7 @@ void ESP8266_Init(void)
   ESP8266_Reset();
   ESP8266_Set_Echo_Off();
   USART_ITConfig(ESP_USART, USART_IT_RXNE, ENABLE);
+  printf("## ESP8266 Initialized ##\r\n");
 }
 
 /**
@@ -67,7 +68,7 @@ void USART2_IRQHandler(void)
   unsigned char rev_byte;
   if(USART_GetITStatus(USART2, USART_IT_RXNE) != RESET)  {
     rev_byte = USART_ReceiveData(USART2);
-    Buff_Push(&ESP_RX_BUF, rev_byte);
+    Buffer_Push(&ESP_RX_BUF, rev_byte);
     // Reset the TIM3 counter and enable it
     TIM_SetCounter(TIM3, 0);
     TIM_Cmd(TIM3, ENABLE);
@@ -89,12 +90,12 @@ u16 ESP8266_Pop_Ack(char* buff_tmp, u16 limit)
 {
   if(ESP_RX_STATE > 0) {
     printf("ESP_RX_STATE %d\r\n", ESP_RX_STATE);
-    Buff_Print(&ESP_RX_BUF);
+    Buffer_Print(&ESP_RX_BUF);
 
     u8 byte;
     u16 pos = 0;
     do {
-      byte = Buff_Pop(&ESP_RX_BUF);
+      byte = Buffer_Pop(&ESP_RX_BUF);
       buff_tmp[pos] = byte;
       pos++;
     } while(byte != 0x00 && pos < limit - 1);
@@ -106,13 +107,13 @@ u16 ESP8266_Pop_Ack(char* buff_tmp, u16 limit)
   return 0;
 }
 
-void USART_Send_String(USART_TypeDef* USARTx, u8* data)
+void ESP8266_Send_String(USART_TypeDef* USARTx, u8* data)
 {
   u8* start = data;
   while (*data != '\0') {
     //printf("s:%02X\r\n", *data);
     USART_SendData(USARTx, *data);
-    while(USART_GetFlagStatus(USARTx, USART_FLAG_TXE) == RESET) {//等待串口发送完数据
+    while(USART_GetFlagStatus(USARTx, USART_FLAG_TXE) == RESET) { // Wait till sent
       ;// Do nothing
     }
     data++;
@@ -122,7 +123,7 @@ void USART_Send_String(USART_TypeDef* USARTx, u8* data)
 
 u8 ESP8266_Send_Cmd(char *cmd, char *ack, u16 waittime)
 {
-  USART_Send_String(ESP_USART, (u8 *)cmd);
+  ESP8266_Send_String(ESP_USART, (u8 *)cmd);
   // Put a 50ms delay here to pevent from be joinned by other commands
   Systick_Delay_ms(50);
   // Make sure waittime is set
@@ -145,7 +146,7 @@ u8 ESP8266_Send_Cmd(char *cmd, char *ack, u16 waittime)
 
 u8 ESP8266_Send_Cmd2(char *cmd, char *ack, char *ack2, u16 waittime)
 {
-  USART_Send_String(ESP_USART, (u8 *)cmd);
+  ESP8266_Send_String(ESP_USART, (u8 *)cmd);
   Systick_Delay_ms(50);
   // Make sure waittime is set
   if (waittime < 10) waittime = 10;
@@ -179,19 +180,19 @@ void ESP8266_Send_Data(u8 *data)
   len = sizeof(data);
   sprintf(cmdbuf_temp, "AT+CIPSEND=%d\r\n", len); //把格式化的数据写入某个字符串中
   if(ESP8266_Send_Cmd(cmdbuf_temp, ">", 200) == ACK_SUCCESS) { //判断返回是否带“>”
-    USART_Send_String(ESP_USART, data);
+    ESP8266_Send_String(ESP_USART, data);
   }
 }
 
 void ESP8266_Reset(void)
 {
-  USART_Send_String(ESP_USART, (u8 *)"AT+RST\r\n");
+  ESP8266_Send_String(ESP_USART, (u8 *)"AT+RST\r\n");
   Systick_Delay_ms(5000);
 }
 
 void ESP8266_Set_Echo_Off(void)
 {
-  USART_Send_String(ESP_USART, (u8 *)"ATE0\r\n");
+  ESP8266_Send_String(ESP_USART, (u8 *)"ATE0\r\n");
   Systick_Delay_ms(500);
 }
 
@@ -395,8 +396,7 @@ u8 ESP8266_Passthrough_Request(Conn_Type type, const char *addr, char *port, voi
 
 void Passthrough_Echo_Test(char *request)
 {
-  USART_Send_String(USART2, (u8 *)request);  //发送GET请求
-
+  ESP8266_Send_String(USART2, (u8 *)request);
   u16 waittime = 1000;
   char buff_tmp[ESP8266_BUF_SIZE];
   while (waittime--) {
@@ -408,93 +408,4 @@ void Passthrough_Echo_Test(char *request)
     Systick_Delay_ms(10);
   }
   printf("No Echo\r\n");
-}
-
-/**
- * Buffer Utilities
-*/
-void Buff_Init(ESP_BufTypeDef* buff, u16 size)
-{
-  buff->size = size;
-  buff->buf = malloc( size * sizeof(unsigned char));
-  memset(buff->buf, 0, size * sizeof(unsigned char));
-  buff->front = 0;
-  buff->rear = 0;
-  ESP_RX_STATE = 0; //允许接收数据
-}
-
-void Buff_Push(ESP_BufTypeDef* buff, unsigned char byte)
-{
-  buff->buf[buff->rear] = byte;
-  buff->rear++;
-  if (buff->rear >= buff->size) {
-    buff->rear = 0;
-  }
-  if (buff->front == buff->rear) {
-    buff->front++;
-    if (buff->front >= buff->size) {
-      buff->front = 0;
-    }
-  }
-}
-
-unsigned char Buff_Pop(ESP_BufTypeDef* buff)
-{
-  if (buff->front == buff->rear) return NULL;
-
-  unsigned char byte = buff->buf[buff->front];
-  buff->front++;
-  if (buff->front >= buff->size) {
-    buff->front = 0;
-  }
-  return byte;
-}
-
-void Buff_Print_All(ESP_BufTypeDef* buff)
-{
-  printf("BUFF:[%d,%d)",buff->front, buff->rear);
-  for(int i=0; i < buff->size; i++) {
-    printf("%c", buff->buf[i]);
-  }
-  printf("\r\n");
-}
-
-void Buff_Print(ESP_BufTypeDef* buff)
-{
-  printf("BUFF:[%03d,%03d)",buff->front, buff->rear);
-  if (buff->front == buff->rear) {
-    // print nothing;
-  } else if (buff->front < buff->rear) {
-    for(int i=buff->front; i < buff->rear; i++) {
-      printf("%c", buff->buf[i]);
-    }
-  } else {
-    for(int i = buff->front; i < buff->size; i++) {
-      printf("%c", buff->buf[i]);
-    }
-    for(int i = 0; i < buff->rear; i++) {
-      printf("%c", buff->buf[i]);
-    }
-  }
-  printf("\r\n");
-}
-
-void Buff_PrintHex(ESP_BufTypeDef* buff)
-{
-  printf("BUFF:[%03d,%03d)",buff->front, buff->rear);
-  if (buff->front == buff->rear) {
-    // print nothing;
-  } else if (buff->front < buff->rear) {
-    for(int i=buff->front; i<buff->rear; i++) {
-      printf("%02X ", buff->buf[i]);
-    }
-  } else {
-    for(int i=buff->front; i < buff->size; i++) {
-      printf("%02X ", buff->buf[i]);
-    }
-    for(int i=0; i<buff->rear; i++) {
-      printf("%02X ", buff->buf[i]);
-    }
-  }
-  printf("\r\n");
 }

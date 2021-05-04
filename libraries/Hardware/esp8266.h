@@ -14,20 +14,6 @@ typedef enum
   UDP
 } Conn_Type;
 
-#pragma pack(1)
-typedef struct
-{
-  unsigned char* buf;
-  u16 size;
-  u16 front;
-  u16 rear;
-}ESP_BufTypeDef;
-
-#pragma pack()
-
-extern ESP_BufTypeDef ESP_RX_BUF;
-extern ESP_BufTypeDef ESP_TX_BUF;
-
 void ESP8266_Init(void);
 u8   ESP8266_Send_Cmd(char *cmd, char *ack, u16 waittime);
 u8   ESP8266_Send_Cmd2(char *cmd, char *ack, char *ack2, u16 waittime);
@@ -46,13 +32,5 @@ u8   ESP8266_Start_Passthrough(void);
 u8   ESP8266_Passthrough_Request(Conn_Type type, const char *addr, char *port, void (*function)());
 
 void Passthrough_Echo_Test(char *request);
-
-void Buff_Init(ESP_BufTypeDef* buff, u16 size);
-void Buff_Print(ESP_BufTypeDef* buff);
-void Buff_PrintHex(ESP_BufTypeDef* buff);
-void Buff_Print_All(ESP_BufTypeDef* buff);
-void Buff_Push(ESP_BufTypeDef* buff, unsigned char byte);
-unsigned char Buff_Pop(ESP_BufTypeDef* buff);
-
 
 #endif
