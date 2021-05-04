@@ -6,11 +6,12 @@ int main(void)
   SystemInit();
   Systick_Init();
 
-  USART1_Init();  //日志打印串口初始化
+  USART1_Init(); // for printf() logging
   //TIM1_Init();
   //TIM2_Init();
   TIM3_Init();
   PB12_Init();
+  PB12_Off(); // Turn off PB12 LED
   ESP8266_Init();
   printf("## Init finished ##\r\n");
   ESP8266_Set_Stationmode();
@@ -21,6 +22,7 @@ int main(void)
     while(1)
     {;}
   }
+  PB12_On(); // Turn on LED after wifi connected
   printf("## WiFi connected ##\r\n");
 
   if (ESP8266_Set_Link_Mux(0) != ACK_SUCCESS) {
@@ -32,34 +34,26 @@ int main(void)
 
   const char* address = "192.168.6.210";
   const char* port = "3333";
-  if(ESP8266_Connect_TCP(address, port) != ACK_SUCCESS) {
-    printf("## Connect to %s failed. ##\r\n", address);
-    while(1)
-    {;}
-  }
-  printf("## Connected to %s ##\r\n", address);
 
-  //ESP8266_Send_Cmd("AT+CIPCLOSE\r\v", "CLOSED", 20);  //断开连接
   u16 count = 0;
   while(1) {
     char request[128];
     sprintf(request, "This is No.%d request. 设置为透传, 透传不允许指定发送长度, 此时从远程传入的信息前面不带\r\n", count++);
     if (ESP8266_Start_Passthrough() != ACK_SUCCESS) {
       printf("## Switch to passthrough failed ##\r\n");
+      ESP8266_Send_Cmd("+++", "", 15);
       if(ESP8266_Connect_TCP(address, port) != ACK_SUCCESS) {
-        printf("Connect to %s failed.\r\n", address);
+        printf("Connect to %s failed. Retry after 5 seconds\r\n", address);
+        Systick_Delay_ms(5000);
       } else {
-        printf("Reconnect to %s.\r\n", address);
+        printf("Reconnected to %s.\r\n", address);
       }
     } else {
       PB12_On();
       Passthrough_Echo_Test(request);
-      PB12_Off();
+      
       ESP8266_Quit_Passthrough();
     }
-    //ESP8266_Send_Cmd("+++\r\n", "OK", 50);
-    //ESP8266_Send_Cmd("AT\r\n", "OK", 50);
-    //ESP8266_Passthrough_Request(UDP, "192.168.6.210", "3333", Passthrough_Echo_Test);
     Systick_Delay_ms(1000);
   }
 }

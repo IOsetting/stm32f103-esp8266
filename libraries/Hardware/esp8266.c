@@ -309,11 +309,10 @@ u8 ESP8266_Set_Link_Mux(u8 mode)
 u8 ESP8266_Connect_TCP(const char *addr, const char *port)
 {
   char tcp_information[64]={0};
-  short int retries = 0;     //重连次数
 
   sprintf(tcp_information, "AT+CIPSTART=\"TCP\",\"%s\",%s\r\n", addr, port);
   //  printf("%s\n",tcp_information);
-  for(retries = 0; retries < 5; retries ++ ) {
+  for(u8 retries = 0; retries < 5; retries ++ ) {
     if(ESP8266_Send_Cmd(tcp_information, "CONNECT", 50) == ACK_SUCCESS) {
       return ACK_SUCCESS;
     }
@@ -354,7 +353,7 @@ u8 ESP8266_Start_Passthrough(void)
 u8 ESP8266_Quit_Passthrough(void)
 {
   // Return true on any result
-  ESP8266_Send_Cmd("+++", "", 15); 
+  ESP8266_Send_Cmd("+++", "", 15);
   // Make a delay > 20ms, otherwise it will be joined by the AT command below and fail to quit.
   return ESP8266_Send_Cmd("AT\r\n","OK", 15);
 }
