@@ -1,21 +1,23 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include "buffer.h"
 
-/**
- * Buffer Utilities
-*/
-void Buffer_Init(BufferTypeDef* buff, u16 size)
+void Buffer_Reset(BufferTypeDef* buff)
 {
-  buff->size = size;
-  buff->buf = malloc( size * sizeof(unsigned char));
-  memset(buff->buf, 0, size * sizeof(unsigned char));
   buff->front = 0;
   buff->rear = 0;
 }
 
-void Buffer_Push(BufferTypeDef* buff, u16 data)
+u16 Buffer_Length(BufferTypeDef* buff)
+{
+  if (buff->rear >= buff->front) {
+    return buff->rear - buff->front;
+  } else {
+    return (buff->size - buff->front) + (buff->rear - 0);
+  }
+}
+
+u8 Buffer_Push(BufferTypeDef* buff, u8 data)
 {
   buff->buf[buff->rear] = data;
   buff->rear++;
@@ -27,19 +29,22 @@ void Buffer_Push(BufferTypeDef* buff, u16 data)
     if (buff->front >= buff->size) {
       buff->front = 0;
     }
+    return NULL;
+  } else {
+    return !NULL;
   }
 }
 
-u16 Buffer_Pop(BufferTypeDef* buff)
+u8 Buffer_Pop(BufferTypeDef* buff, u8* data)
 {
   if (buff->front == buff->rear) return NULL;
 
-  u16 data = buff->buf[buff->front];
+  *data = buff->buf[buff->front];
   buff->front++;
   if (buff->front >= buff->size) {
     buff->front = 0;
   }
-  return data;
+  return !NULL;
 }
 
 void Buffer_Print(BufferTypeDef* buff)

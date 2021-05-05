@@ -3,7 +3,7 @@
 
 #include "stm32f10x.h"
 
-#define ESP8266_BUF_SIZE   128
+#define ESP8266_BUF_SIZE   64
 
 #define ACK_SUCCESS   1
 #define ACK_DEFEAT    0

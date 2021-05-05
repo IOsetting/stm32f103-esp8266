@@ -5,15 +5,19 @@ int main(void)
 {
   SystemInit();
   Systick_Init();
-
   USART1_Init(); // for printf() logging
-  TIM2_Init(); // TIM2 for UHF RFID
   TIM3_Init(); // TIM3 for ESP8266
   PB12_Init();
   PB12_Off(); // Turn off PB12 LED
-  ESP8266_Init();
+
   RFID_Init();
+  ESP8266_Init();
   
+  u16* p; u16 i = 500;
+  p = malloc(i * sizeof(u8));
+  memset(p, 0x00, i * sizeof(u8));
+  printf("m: %d\r\n", i * sizeof(u8));
+
   ESP8266_Set_Stationmode();
   printf("## Switched to station mode ##\r\n");
 
@@ -39,6 +43,7 @@ int main(void)
   while(1) {
     char request[128];
     sprintf(request, "This is No.%d request. 设置为透传, 透传不允许指定发送长度, 此时从远程传入的信息前面不带\r\n", count++);
+
     if (ESP8266_Start_Passthrough() != ACK_SUCCESS) {
       printf("## Switch to passthrough failed ##\r\n");
       ESP8266_Send_Cmd("+++", "", 15);
@@ -51,10 +56,11 @@ int main(void)
     } else {
       PB12_On();
       Passthrough_Echo_Test(request);
-      
       ESP8266_Quit_Passthrough();
     }
-    Systick_Delay_ms(1000);
+
+    RFID_Check_Version();
+    Systick_Delay_ms(5000);
   }
 }
 

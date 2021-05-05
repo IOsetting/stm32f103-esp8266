@@ -11,13 +11,16 @@
 #define ESP_RX_PIN    GPIO_Pin_3   //PA3
 #define ESP_RX_GPIO   GPIOA
 #define ESP_USART     USART2
+#define ESP_BUF_SIZE  128
 
-BufferTypeDef ESP_RX_BUF;    //Wifi串口接收缓冲区
-u8 ESP_RX_STATE = 0;          //初始化已接收数据为0
+BufferTypeDef ESP_RX_BUF;
+u8 ESP_RX_BUF_BUFF[ESP_BUF_SIZE] = {0x00};
+u8 ESP_RX_STATE = 0;
 
 void ESP8266_Init(void)
 {
-  Buffer_Init(&ESP_RX_BUF, ESP8266_BUF_SIZE);
+  ESP_RX_BUF.buf = ESP_RX_BUF_BUFF;
+  ESP_RX_BUF.size = ESP_BUF_SIZE;
 
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
   //RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
@@ -92,13 +95,10 @@ u16 ESP8266_Pop_Ack(char* buff_tmp, u16 limit)
     printf("ESP_RX_STATE %d\r\n", ESP_RX_STATE);
     Buffer_Print(&ESP_RX_BUF);
 
-    u8 byte;
-    u16 pos = 0;
-    do {
-      byte = Buffer_Pop(&ESP_RX_BUF);
-      buff_tmp[pos] = byte;
-      pos++;
-    } while(byte != 0x00 && pos < limit - 1);
+    u8 data, pos = 0;
+    while (Buffer_Pop(&ESP_RX_BUF, &data) != NULL && pos < limit - 1) {
+      buff_tmp[pos++] = data;
+    }
     buff_tmp[pos] = 0x00; // Add '\0' at the end
     printf("ESP_RX_STATE--, take one ack, size: %d\r\n", pos);
     ESP_RX_STATE--;
@@ -107,13 +107,13 @@ u16 ESP8266_Pop_Ack(char* buff_tmp, u16 limit)
   return 0;
 }
 
-void ESP8266_Send_String(USART_TypeDef* USARTx, u8* data)
+void ESP8266_Send_String(u8* data)
 {
   u8* start = data;
   while (*data != '\0') {
     //printf("s:%02X\r\n", *data);
-    USART_SendData(USARTx, *data);
-    while(USART_GetFlagStatus(USARTx, USART_FLAG_TXE) == RESET) { // Wait till sent
+    USART_SendData(ESP_USART, *data);
+    while(USART_GetFlagStatus(ESP_USART, USART_FLAG_TXE) == RESET) { // Wait till sent
       ;// Do nothing
     }
     data++;
@@ -123,7 +123,7 @@ void ESP8266_Send_String(USART_TypeDef* USARTx, u8* data)
 
 u8 ESP8266_Send_Cmd(char *cmd, char *ack, u16 waittime)
 {
-  ESP8266_Send_String(ESP_USART, (u8 *)cmd);
+  ESP8266_Send_String((u8 *)cmd);
   // Put a 50ms delay here to pevent from be joinned by other commands
   Systick_Delay_ms(50);
   // Make sure waittime is set
@@ -146,7 +146,7 @@ u8 ESP8266_Send_Cmd(char *cmd, char *ack, u16 waittime)
 
 u8 ESP8266_Send_Cmd2(char *cmd, char *ack, char *ack2, u16 waittime)
 {
-  ESP8266_Send_String(ESP_USART, (u8 *)cmd);
+  ESP8266_Send_String((u8 *)cmd);
   Systick_Delay_ms(50);
   // Make sure waittime is set
   if (waittime < 10) waittime = 10;
@@ -180,19 +180,19 @@ void ESP8266_Send_Data(u8 *data)
   len = sizeof(data);
   sprintf(cmdbuf_temp, "AT+CIPSEND=%d\r\n", len); //把格式化的数据写入某个字符串中
   if(ESP8266_Send_Cmd(cmdbuf_temp, ">", 200) == ACK_SUCCESS) { //判断返回是否带“>”
-    ESP8266_Send_String(ESP_USART, data);
+    ESP8266_Send_String(data);
   }
 }
 
 void ESP8266_Reset(void)
 {
-  ESP8266_Send_String(ESP_USART, (u8 *)"AT+RST\r\n");
-  Systick_Delay_ms(5000);
+  ESP8266_Send_String((u8 *)"AT+RST\r\n");
+  Systick_Delay_ms(3000);
 }
 
 void ESP8266_Set_Echo_Off(void)
 {
-  ESP8266_Send_String(ESP_USART, (u8 *)"ATE0\r\n");
+  ESP8266_Send_String((u8 *)"ATE0\r\n");
   Systick_Delay_ms(500);
 }
 
@@ -393,10 +393,9 @@ u8 ESP8266_Passthrough_Request(Conn_Type type, const char *addr, char *port, voi
 /**
  * Passthrough inline methods
  */
-
 void Passthrough_Echo_Test(char *request)
 {
-  ESP8266_Send_String(USART2, (u8 *)request);
+  ESP8266_Send_String((u8 *)request);
   u16 waittime = 1000;
   char buff_tmp[ESP8266_BUF_SIZE];
   while (waittime--) {
