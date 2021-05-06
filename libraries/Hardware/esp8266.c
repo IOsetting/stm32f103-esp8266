@@ -392,7 +392,7 @@ u8 ESP8266_Passthrough_Request(Conn_Type type, const char *addr, char *port, voi
 void Passthrough_Echo_Test(char *request)
 {
   ESP8266_Send_String((u8 *)request);
-  u16 waittime = 500;
+  u16 waittime = 100;
   while (waittime--) {
     if(ESP_RX_STATE > 0) {
       printf("ESP_RX_STATE %d\r\n", ESP_RX_STATE);

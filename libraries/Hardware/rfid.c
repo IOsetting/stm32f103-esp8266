@@ -129,7 +129,7 @@ void RFID_Send_String(const u8* data, u16 length)
 bool RFID_Send_Cmd(const u8* cmd, u16 length)
 {
   RFID_Send_String(cmd, length);
-  // Put a 50ms delay here to pevent from be joinned by other commands
+  // Delay 50ms to avoid being joinned by other commands
   Systick_Delay_ms(50);
 
   u8 waittime = 10;
@@ -138,12 +138,7 @@ bool RFID_Send_Cmd(const u8* cmd, u16 length)
       printf("RFID_RX_STATE %d\r\n", RFID_RX_STATE);
       if (Buffer_Pop_All(&RFID_RX_BUF, &RFID_RX_CLIP) != NULL) {
         Buffer_Clip_Print_Hex(&RFID_RX_CLIP);
-        char tmp[3] = {0};
-        for (u8 i = 0; i < RFID_RX_CLIP.length; i++) {
-          sprintf(tmp, "%02X ", *(RFID_RX_CLIP.data + i));
-          ESP8266_Send_Data((u8*)tmp, 3);
-        }
-        ESP8266_Send_Data((u8*)"\r\n", 2);
+        RFID_Handle_Message();
       }
       RFID_RX_STATE--;
     }
@@ -151,6 +146,8 @@ bool RFID_Send_Cmd(const u8* cmd, u16 length)
   }
   return true;
 }
+
+
 
 void RFID_Check_Version(void)
 {
@@ -167,3 +164,177 @@ void RFID_Inventory_Single(void)
   RFID_Send_Cmd(RFID_CMD_INVENTORY_SINGLE, 7);
 }
 
+u8 RFID_Checksum(u8 *buff, u8 len)
+{
+	u8 usum = 0;
+	for(u8 i = 0; i < len; i++) {
+		usum = usum + buff[i];
+	}
+	return usum;
+}
+
+void RFID_Handle_Message(void)
+{
+  // step - 0:init, 1:Header 0xAA, 2:Type 0x??, 3:Command 0x??, 4:Length 0x????, 5:Params ..., 6:Checksum 0x?? 7:End 0xDD
+  u8 pos = 0, step = 0, command = 0x00, length = 0, dummy = 0x00;
+  u8 checksum_start = 0, param_start = 0;
+  char tmp[3];
+  while (pos < RFID_RX_CLIP.length) {
+    switch (step) {
+      case 0: // init-> Header 0xAA
+        command = 0x00;
+        length = 0;
+        checksum_start = 0;
+        param_start = 0;
+        if (RFID_RX_CLIP.data[pos] == 0xAA) {
+          pos++;
+          step = 1;
+        } else {
+          pos++;
+        }
+        break;
+      case 1: // Header -> Type 0x??
+        if (RFID_RX_CLIP.data[pos] == 0x01 || RFID_RX_CLIP.data[pos] == 0x02) {
+          checksum_start = pos; // Mark the checksum calcu start point
+          pos++;
+          step = 2;
+        } else {
+          step = 0;
+          continue;
+        }
+        break;
+      case 2: // Type -> Command 0x??
+        command = RFID_RX_CLIP.data[pos];
+        switch (command) {
+          case 0xFF: // Error
+            break;
+          case 0x03: // 获取读写器模块信息
+            break;
+          case 0x22: // 单次轮询, 多次轮询
+            break;
+          case 0x28: // 停止多次轮询
+            break;
+          case 0x0C: // 设置Select参数, 设置Select模式
+            break;
+          case 0x0B: // 获取Select参数
+            break;
+          case 0x39: // 读标签数据存储区
+            break;
+          case 0x49: // 写标签数据存储区
+            break;
+          case 0x82: // 锁定Lock标签数据存储区
+            break;
+          case 0x65: // Kill标签
+            break;
+          case 0x0D: // 获取Query参数
+            break;
+          case 0x0E: // 设置Query参数
+            break;
+          case 0x07: // 设置工作地区
+            break;
+          case 0x08: // 获取工作地区
+            break;
+          case 0xAB: // 设置工作信道
+            break;
+          case 0xAA: // 获取工作信道
+            break;
+          case 0xAD: // 设置自动跳频
+            break;
+          case 0xA9: // 插入工作信道
+            break;
+          case 0xB7: // 获取发射功率
+            break;
+          case 0xB6: // 设置发射功率
+            break;
+          case 0xB0: // 设置发射连续载波
+            break;
+          case 0xF1: // 获取接收解调器参数
+            break;
+          case 0xF0: // 设置接收解调器参数
+            break;
+          case 0xF2: // 测试射频输入端阻塞信号
+            break;
+          case 0xF3: // 测试信道RSSI
+            break;
+          case 0x1A: // 控制IO端口
+            break;
+          case 0x17: // 模块休眠
+            break;
+          case 0x1D: // 模块空闲休眠时间
+            break;
+          case 0x04: // 模块 ILDE 模式
+            break;
+          case 0xE1: // NXP ReadProtect指令
+            break;
+          case 0xE2: // NXP Reset ReadProtect指令
+            break;
+          case 0xE3: // NXP Change EAS指令
+            break;
+          case 0xE4: // NXP EAS_Alarm指令
+            break;
+          case 0xE0: // NXP ChangeConfig指令
+            break;
+          case 0xE5: // Impinj Monza QT指令, Read/Write 数据域为 0x00时
+            break;
+          case 0xE6: // Impinj Monza QT指令, Read/Write 数据域为 0x01时
+            break;
+          case 0xD3: // BlockPermalock指令, Read/Lock 数据域为 0x00时
+            break;
+          case 0xD4: // BlockPermalock指令, Read/Lock 数据域为 0x01时
+            break;
+          default:   // 未知响应
+            break;
+        }
+        pos++;
+        step = 3;
+        break;
+      case 3: // Command -> Length 0x????
+        if (pos + 1 < RFID_RX_CLIP.length) {
+          length = RFID_RX_CLIP.data[pos + 1];
+          pos += 2;
+          step = 4;
+        } else {
+          step = 0;
+          continue;
+        }
+        break;
+      case 4: // Length -> Params
+        if (pos + length < RFID_RX_CLIP.length) {
+          param_start = pos;
+          pos += length;
+          step = 5;
+        } else {
+          step = 0;
+          continue;
+        }
+        break;
+      case 5:
+        dummy = RFID_Checksum(RFID_RX_CLIP.data + checksum_start, pos - checksum_start);
+        if (dummy == RFID_RX_CLIP.data[pos]) {
+          pos++;
+          step = 6;
+        } else {
+          printf("Checksum failed %02X, expect %02X\r\n", dummy, RFID_RX_CLIP.data[pos]);
+          step = 0;
+          continue;
+        }
+        break;
+      case 6: // Checksum -> End 0xDD
+        printf("ps:%d, len:%d: ", param_start, length);
+        sprintf(tmp, "%02X:", command);
+        ESP8266_Send_Data((u8*)tmp, 3);
+        for (u8 i = param_start; i < param_start + length; i++) {
+          sprintf(tmp, "%02X ", *(RFID_RX_CLIP.data + i));
+          printf("%s", tmp);
+          ESP8266_Send_Data((u8*)tmp, 3);
+        }
+        printf("\r\n");
+        ESP8266_Send_Data((u8*)"\r\n", 2);
+        if (RFID_RX_CLIP.data[pos] == 0xDD) {
+          pos++;
+        }
+        step = 0;
+        break;
+    }
+  }
+}

@@ -40,11 +40,9 @@ int main(void)
   const char* address = "192.168.17.81";
   const char* port = "3333";
 
-  u16 count = 0;
+  u32 count = 0;
+  char request[128];
   while(1) {
-    char request[128];
-    sprintf(request, "This is No.%d request. 设置为透传, 透传不允许指定发送长度, 此时从远程传入的信息前面不带\r\n", count++);
-
     if (ESP8266_Start_Passthrough() != ACK_SUCCESS) {
       printf("## Switch to passthrough failed ##\r\n");
       ESP8266_Send_Cmd("+++", "", 15);
@@ -56,11 +54,13 @@ int main(void)
       }
     } else {
       PB12_On();
+      sprintf(request, "No. %d:\r\n", count++);
       Passthrough_Echo_Test(request);
       RFID_Check_Version();
       RFID_Query_Config();
       RFID_Inventory_Single();
-      Systick_Delay_ms(5000);
+      PB12_Off();
+      Systick_Delay_ms(3000);
       ESP8266_Quit_Passthrough();
     }
 
