@@ -149,6 +149,6 @@ void TIM3_Init(void)
   // if it be enabled here, it will introduce an extra count 
   // TIM_Cmd(TIM3, ENABLE); 
   
-  printf("## TIM1 Initialized ##\r\n");
+  printf("## TIM3 Initialized ##\r\n");
 }
 

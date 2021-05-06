@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "buffer.h"
+#include "esp8266.h"
 #include "rfid.h"
 #include "timer.h"
 
@@ -37,12 +38,18 @@ AA 01 03 00 08 01 56 38 2E 32 36 2E 30 8F DD
 
 BufferTypeDef RFID_RX_BUF;
 u8 RFID_RX_BUF_BUFF[RFID_BUF_SIZE] = {0x00};
+
+BufferClip RFID_RX_CLIP;
+u8 RFID_RX_CLIP_DATA[UINT8_MAX] = {0x00};
+
 u8 RFID_RX_STATE = 0;
 
 void RFID_Init(void)
 {
   RFID_RX_BUF.buf = RFID_RX_BUF_BUFF;
   RFID_RX_BUF.size = RFID_BUF_SIZE;
+  RFID_RX_CLIP.data = RFID_RX_CLIP_DATA;
+  RFID_RX_CLIP.size = UINT8_MAX;
 
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
   RCC_APB1PeriphClockCmd(RFID_RCC, ENABLE);
@@ -79,7 +86,6 @@ void RFID_Init(void)
   USART_Cmd(RFID_USART, ENABLE);
 
   USART_ITConfig(RFID_USART, USART_IT_RXNE, ENABLE);
-  USART_ITConfig(RFID_USART, USART_IT_IDLE, ENABLE);
   printf("## UHF RFID Initialized ##\r\n");
 }
 
@@ -90,31 +96,21 @@ void USART3_IRQHandler(void)
   if(USART_GetITStatus(USART3, USART_IT_RXNE) != RESET)  {
     rev_byte = USART_ReceiveData(USART3);
     Buffer_Push(&RFID_RX_BUF, rev_byte);
+    // Reset the TIM2 counter and enable it
+    TIM_SetCounter(TIM2, 0);
+    TIM_Cmd(TIM2, ENABLE);
     USART_ClearITPendingBit(USART3, USART_IT_RXNE);
-  } else if(USART_GetITStatus(USART3, USART_IT_IDLE) != RESET){ // IDLE INT
-    clear = USART3->DR;
-    clear = USART3->SR;
-    printf("RFID_RX_STATE++\r\n");
-    RFID_RX_STATE++;
-	}
+  }
 }
 
-u16 RFID_Pop_Ack(u8* buff_tmp, u16 limit)
+void TIM2_IRQHandler(void)
 {
-  if(RFID_RX_STATE > 0) {
-    printf("RFID_RX_STATE %d\r\n", RFID_RX_STATE);
-    Buffer_PrintHex(&RFID_RX_BUF);
-
-    u8 data;
-    u16 pos = 0;
-    while (Buffer_Pop(&RFID_RX_BUF, &data) != NULL && pos < limit) {
-      buff_tmp[pos++] = data;
-    }
-    printf("RFID_RX_STATE--, take one ack, size: %d\r\n", pos);
-    RFID_RX_STATE--;
-    return pos;
+  if(TIM_GetITStatus(TIM2, TIM_IT_Update) == SET) {
+    printf("RFID_RX_STATE++\r\n");
+    RFID_RX_STATE++;
   }
-  return 0;
+  TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
+  TIM_Cmd(TIM2, DISABLE);
 }
 
 void RFID_Send_String(const u8* data, u16 length)
@@ -130,29 +126,44 @@ void RFID_Send_String(const u8* data, u16 length)
   printf(">> Sent\r\n");
 }
 
-bool RFID_Send_Cmd(const u8* cmd, u16 length, u8 *ack, u16 waittime)
+bool RFID_Send_Cmd(const u8* cmd, u16 length)
 {
   RFID_Send_String(cmd, length);
   // Put a 50ms delay here to pevent from be joinned by other commands
   Systick_Delay_ms(50);
-  // Make sure waittime is set
-  if (waittime < 10) waittime = 10;
 
-  u8 buff_tmp[RFID_BUF_SIZE];
+  u8 waittime = 10;
   while (waittime--) {
-    memset(buff_tmp, 0, RFID_BUF_SIZE * sizeof(u8));
-    if (RFID_Pop_Ack(buff_tmp, RFID_BUF_SIZE) > 0) {
-      printf("return true\r\n\n");
-      return true;
+    if(RFID_RX_STATE > 0) {
+      printf("RFID_RX_STATE %d\r\n", RFID_RX_STATE);
+      if (Buffer_Pop_All(&RFID_RX_BUF, &RFID_RX_CLIP) != NULL) {
+        Buffer_Clip_Print_Hex(&RFID_RX_CLIP);
+        char tmp[3] = {0};
+        for (u8 i = 0; i < RFID_RX_CLIP.length; i++) {
+          sprintf(tmp, "%02X ", *(RFID_RX_CLIP.data + i));
+          ESP8266_Send_Data((u8*)tmp, 3);
+        }
+        ESP8266_Send_Data((u8*)"\r\n", 2);
+      }
+      RFID_RX_STATE--;
     }
-    Systick_Delay_ms(20);
+    Systick_Delay_ms(50);
   }
-  printf("return defeat\r\n\n");
-  return false;
+  return true;
 }
 
 void RFID_Check_Version(void)
 {
-  u8 ack[] = {0x00};
-  RFID_Send_Cmd(RFID_CMD_VERSION, 8, ack, 1000);
+  RFID_Send_Cmd(RFID_CMD_VERSION, 8);
 }
+
+void RFID_Query_Config(void)
+{
+  RFID_Send_Cmd(RFID_CMD_QUERY_CONFIG, 9);
+}
+
+void RFID_Inventory_Single(void)
+{
+  RFID_Send_Cmd(RFID_CMD_INVENTORY_SINGLE, 7);
+}
+

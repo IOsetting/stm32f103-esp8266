@@ -15,12 +15,18 @@
 
 BufferTypeDef ESP_RX_BUF;
 u8 ESP_RX_BUF_BUFF[ESP_BUF_SIZE] = {0x00};
+
+BufferClip ESP_RX_CLIP;
+u8 ESP_RX_CLIP_DATA[ESP_BUF_SIZE] = {0x00};
+
 u8 ESP_RX_STATE = 0;
 
 void ESP8266_Init(void)
 {
   ESP_RX_BUF.buf = ESP_RX_BUF_BUFF;
   ESP_RX_BUF.size = ESP_BUF_SIZE;
+  ESP_RX_CLIP.data = ESP_RX_CLIP_DATA;
+  ESP_RX_CLIP.size = ESP_BUF_SIZE;
 
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
   //RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
@@ -89,22 +95,17 @@ void TIM3_IRQHandler(void)
   TIM_Cmd(TIM3, DISABLE);
 }
 
-u16 ESP8266_Pop_Ack(char* buff_tmp, u16 limit)
+void ESP8266_Send_Data(u8 *data, u8 length)
 {
-  if(ESP_RX_STATE > 0) {
-    printf("ESP_RX_STATE %d\r\n", ESP_RX_STATE);
-    Buffer_Print(&ESP_RX_BUF);
-
-    u8 data, pos = 0;
-    while (Buffer_Pop(&ESP_RX_BUF, &data) != NULL && pos < limit - 1) {
-      buff_tmp[pos++] = data;
+  //printf("Data: ");
+  for (u8 i = 0; i < length; i++) {
+    //printf("%02X ", *(data + i));
+    USART_SendData(ESP_USART, *(data + i));
+    while(USART_GetFlagStatus(ESP_USART, USART_FLAG_TXE) == RESET) { // Wait till sent
+      ;// Do nothing
     }
-    buff_tmp[pos] = 0x00; // Add '\0' at the end
-    printf("ESP_RX_STATE--, take one ack, size: %d\r\n", pos);
-    ESP_RX_STATE--;
-    return pos;
   }
-  return 0;
+  //printf("sent\r\n");
 }
 
 void ESP8266_Send_String(u8* data)
@@ -129,13 +130,17 @@ u8 ESP8266_Send_Cmd(char *cmd, char *ack, u16 waittime)
   // Make sure waittime is set
   if (waittime < 10) waittime = 10;
 
-  char buff_tmp[ESP8266_BUF_SIZE];
   while (waittime--) {
-    memset(buff_tmp, 0, ESP8266_BUF_SIZE * sizeof(char));
-    ESP8266_Pop_Ack(buff_tmp, ESP8266_BUF_SIZE);
-    if(strstr(buff_tmp, ack) != NULL) {
-      printf("return success\r\n\n");
-      return ACK_SUCCESS;
+    if(ESP_RX_STATE > 0) {
+      printf("ESP_RX_STATE %d\r\n", ESP_RX_STATE);
+      ESP_RX_STATE--;
+      if (Buffer_Pop_All(&ESP_RX_BUF, &ESP_RX_CLIP) != NULL) {
+        Buffer_Clip_Print(&ESP_RX_CLIP);
+        if(strstr((char *)(ESP_RX_CLIP.data), ack) != NULL) {
+          printf("return success\r\n\n");
+          return ACK_SUCCESS;
+        }
+      }
     }
     Systick_Delay_ms(20);
   }
@@ -151,43 +156,34 @@ u8 ESP8266_Send_Cmd2(char *cmd, char *ack, char *ack2, u16 waittime)
   // Make sure waittime is set
   if (waittime < 10) waittime = 10;
 
-  char buff_tmp[ESP8266_BUF_SIZE];
   while (waittime--) {
-    memset(buff_tmp, 0, ESP8266_BUF_SIZE * sizeof(char));
-    ESP8266_Pop_Ack(buff_tmp, ESP8266_BUF_SIZE);
-    if(strstr(buff_tmp, ack) != NULL) {
-      printf("return success\r\n\n");
-      return ACK_SUCCESS;
-    }
-    if (strlen(ack2) > 0) {
-      if(strstr(buff_tmp, ack2) != NULL) {
-        printf("return success\r\n\n");
-        return ACK_SUCCESS;
+    if(ESP_RX_STATE > 0) {
+      printf("ESP_RX_STATE %d\r\n", ESP_RX_STATE);
+      ESP_RX_STATE--;
+      if (Buffer_Pop_All(&ESP_RX_BUF, &ESP_RX_CLIP) != NULL) {
+        Buffer_Clip_Print(&ESP_RX_CLIP);
+        if(strstr((char *)(ESP_RX_CLIP.data), ack) != NULL) {
+          printf("return success\r\n\n");
+          return ACK_SUCCESS;
+        }
+        if (strlen(ack2) > 0) {
+          if(strstr((char *)(ESP_RX_CLIP.data), ack2) != NULL) {
+            printf("return success\r\n\n");
+            return ACK_SUCCESS;
+          }
+        }
       }
     }
     Systick_Delay_ms(20);
   }
-
   printf("return defeat\r\n\n");
   return ACK_DEFEAT;
-}
-
-//发送数据
-void ESP8266_Send_Data(u8 *data)
-{
-  char cmdbuf_temp[128];
-  unsigned short len;
-  len = sizeof(data);
-  sprintf(cmdbuf_temp, "AT+CIPSEND=%d\r\n", len); //把格式化的数据写入某个字符串中
-  if(ESP8266_Send_Cmd(cmdbuf_temp, ">", 200) == ACK_SUCCESS) { //判断返回是否带“>”
-    ESP8266_Send_String(data);
-  }
 }
 
 void ESP8266_Reset(void)
 {
   ESP8266_Send_String((u8 *)"AT+RST\r\n");
-  Systick_Delay_ms(3000);
+  Systick_Delay_ms(5000);
 }
 
 void ESP8266_Set_Echo_Off(void)
@@ -396,13 +392,14 @@ u8 ESP8266_Passthrough_Request(Conn_Type type, const char *addr, char *port, voi
 void Passthrough_Echo_Test(char *request)
 {
   ESP8266_Send_String((u8 *)request);
-  u16 waittime = 1000;
-  char buff_tmp[ESP8266_BUF_SIZE];
+  u16 waittime = 500;
   while (waittime--) {
-    memset(buff_tmp, 0, ESP8266_BUF_SIZE * sizeof(char));
-    if (ESP8266_Pop_Ack(buff_tmp, ESP8266_BUF_SIZE) > 0) {
-      printf("[Echo]:%s\r\n", buff_tmp);
-      return;
+    if(ESP_RX_STATE > 0) {
+      printf("ESP_RX_STATE %d\r\n", ESP_RX_STATE);
+      ESP_RX_STATE--;
+      if (Buffer_Pop_All(&ESP_RX_BUF, &ESP_RX_CLIP) != NULL) {
+        Buffer_Clip_Print(&ESP_RX_CLIP);
+      }
     }
     Systick_Delay_ms(10);
   }

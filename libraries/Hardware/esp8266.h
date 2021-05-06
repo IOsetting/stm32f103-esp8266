@@ -17,7 +17,7 @@ typedef enum
 void ESP8266_Init(void);
 u8   ESP8266_Send_Cmd(char *cmd, char *ack, u16 waittime);
 u8   ESP8266_Send_Cmd2(char *cmd, char *ack, char *ack2, u16 waittime);
-void ESP8266_Send_Data(u8 *data);
+void ESP8266_Send_Data(u8 *data, u8 length);
 
 void ESP8266_Reset(void);
 void ESP8266_Set_Echo_Off(void);

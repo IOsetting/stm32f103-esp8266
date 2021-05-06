@@ -6,6 +6,7 @@ int main(void)
   SystemInit();
   Systick_Init();
   USART1_Init(); // for printf() logging
+  TIM2_Init();
   TIM3_Init(); // TIM3 for ESP8266
   PB12_Init();
   PB12_Off(); // Turn off PB12 LED
@@ -36,7 +37,7 @@ int main(void)
   }
   printf("## MUX Set To 0 ##\r\n");
 
-  const char* address = "192.168.6.210";
+  const char* address = "192.168.17.81";
   const char* port = "3333";
 
   u16 count = 0;
@@ -56,11 +57,14 @@ int main(void)
     } else {
       PB12_On();
       Passthrough_Echo_Test(request);
+      RFID_Check_Version();
+      RFID_Query_Config();
+      RFID_Inventory_Single();
+      Systick_Delay_ms(5000);
       ESP8266_Quit_Passthrough();
     }
 
-    RFID_Check_Version();
-    Systick_Delay_ms(5000);
+    
   }
 }
 
