@@ -26,10 +26,7 @@ u8 Buffer_Push(BufferTypeDef* buff, u8 data)
     buff->rear = 0;
   }
   if (buff->front == buff->rear) {
-    buff->front++;
-    if (buff->front >= buff->size) {
-      buff->front = 0;
-    }
+    buff->front = (buff->front + 1) % buff->size;
     return NULL;
   } else {
     return !NULL;
@@ -41,10 +38,7 @@ u8 Buffer_Pop(BufferTypeDef* buff, u8* data)
   if (buff->front == buff->rear) return NULL;
 
   *data = buff->buf[buff->front];
-  buff->front++;
-  if (buff->front >= buff->size) {
-    buff->front = 0;
-  }
+  buff->front = (buff->front + 1) % buff->size;
   return !NULL;
 }
 
