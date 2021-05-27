@@ -37,20 +37,17 @@ int main(void)
   }
   printf("## MUX Set To 0 ##\r\n");
 
-  const char* address = "192.168.17.81";
-  const char* port = "3333";
-
   u32 count = 0;
   char request[128];
   while(1) {
     if (ESP8266_Start_Passthrough() != ACK_SUCCESS) {
       printf("## Switch to passthrough failed ##\r\n");
       ESP8266_Send_Cmd("+++", "", 15);
-      if(ESP8266_Connect_TCP(address, port) != ACK_SUCCESS) {
-        printf("Connect to %s failed. Retry after 5 seconds\r\n", address);
+      if(ESP8266_Connect_TCP(SERVER_IP, SERVER_PORT) != ACK_SUCCESS) {
+        printf("Connect to %s failed. Retry after 5 seconds\r\n", SERVER_IP);
         Systick_Delay_ms(5000);
       } else {
-        printf("Reconnected to %s.\r\n", address);
+        printf("Reconnected to %s.\r\n", SERVER_IP);
       }
     } else {
       PB12_On();

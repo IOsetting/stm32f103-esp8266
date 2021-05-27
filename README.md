@@ -17,11 +17,11 @@ Refer below table to connect ESP-01S pins with STM32 pins:
 | ESP-01S   | STM32    | USB2TTL      | RFID  |
 | --------- | -------- | ------------ | ----  |
 | GND       | GND      | GND          | GND   |
-| TX(GPIO1) | PA10     |              |       |
-| RX(GPIO3) | PA9      |              |       |
+| TX(GPIO1) | PA3      |              |       |
+| RX(GPIO3) | PA2      |              |       |
 | 3.3V      | 3.3V     |              | 3.3V  |
-|           | PA3      | TX           |       |
-|           | PA2      | RX           |       |
+|           | PA10     | TX           |       |
+|           | PA9      | RX           |       |
 |           | PB10     |              | RX    |
 |           | PB11     |              | TX    |
 
